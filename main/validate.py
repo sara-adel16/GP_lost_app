@@ -29,30 +29,21 @@ def register_email(email):
 
 
 def registration(form):
-    username = form.get('username')
     phone_number = form.get('phone_number')
     email = form.get('email')
 
     if register_phone_number(phone_number):
         res = {
             'status': 202,
-            'message': 'User already exists. Please Log in.',
+            'message': 'هذا المستخدم موجود بالفعل، قم بتسجيل الدخول',
             'data': None
         }
         return make_response(jsonify(res)), 202
 
-    if register_username(username):
-        res = {
-            'status': 409,
-            'message': "That username is taken.",
-            'data': None
-        }
-        return make_response(jsonify(res)), 409
-
     if register_email(email):
         res = {
             'status': 409,
-            'message': "That email is taken.",
+            'message': "هذا البريد الإلكتروني مُستخدم",
             'data': None
         }
         return make_response(jsonify(res)), 409

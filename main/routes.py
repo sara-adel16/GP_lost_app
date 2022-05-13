@@ -1,5 +1,5 @@
 from flask import Blueprint, request, make_response, json, jsonify
-from flask_jwt import JWT
+#from flask_jwt import JWT
 from main import app, mysql, bcrypt, SECRET_KEY, validate
 import MySQLdb.cursors
 import uuid, jwt
@@ -80,33 +80,30 @@ def register():
     data = request.json
     username = data.get('username')
     phone_number = data.get('phone_number')
-    email = data.get('email')
+    email = data.get('email') if data.get('email') is not None else ""
     password = data.get('password')
 
     res = validate.registration(data)
     if res is not None:
         return res
 
-    #store the new user's data in the database
     cursor = mysql.connection.cursor()
     cursor.execute(
-       # cursor.execute('INSERT INTO accounts VALUES (NULL, % s, % s, % s)', (username, password, email,))
         ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id) VALUES (%s, %s, %s, %s, NULL) ''', (username, phone_number, password, email,))
 
-    cursor.execute(''' SELECT * FROM User WHERE phone_number = %s ''', (phone_number,))
-    user = cursor.fetchone()
+    user_id = cursor.lastrowid
 
     mysql.connection.commit()
     cursor.close()
 
     res = {
         'status': 200,
-        'message': "Successfully registered.",
+        'message': "تم التسجيل بنجاح",
         'data': {
-            'id': user['user_id'],
-            'username': user['the_name'],
-            'phone_number': user['phone_number'],
-            'email': user['email']
+            'id': user_id,
+            'username': username,
+            'phone_number': phone_number,
+            'email': email
         }
     }
     return make_response(jsonify(res)), 200
@@ -131,7 +128,7 @@ def login():
         token = encode_auth_token(user['user_id'])
         res = {
             'status': 200,
-            'message': "Logged in successfully",
+            'message': "تم تسجيل الدخول بنجاح",
             'data': {
                 'id': user['user_id'],
                 'username': user['the_name'],
@@ -145,7 +142,7 @@ def login():
     else:
         res = {
             'status': 404,
-            'message': "Login Unsuccessful, User does not exist or password is not correct",
+            'message': "فشل تسجيل الدخول، تأكد من رقم الهاتف وكلمة السر",
             'data': None
         }
         return make_response(jsonify(res)), 404
@@ -231,7 +228,7 @@ def reset_password():
     cursor.close()
     res = {
         'status': 200,
-        'message': "Password has been updated",
+        'message': "تم تحديث كلمة السر",
     }
     return make_response(jsonify(res)), 200
 
@@ -288,7 +285,7 @@ def create_post():
 
     res = {
         "status": 200,
-        "message": "post is created successfully",
+        "message": "تم نشر المنشور بنجاح",
         "data": {
             "user_id": user_data['user_id'],
             "username": user_data['username'],
@@ -375,7 +372,7 @@ def update_post():
 
     res = {
         "status": 200,
-        "message": "post is updated successfully",
+        "message": "تم تحديث المنشور بنجاح",
         "data": {
             "user_id": user_data['user_id'],
             "username": user_data['username'],
