@@ -1,6 +1,6 @@
 from flask import Blueprint, request, make_response, json, jsonify
 #from flask_jwt import JWT
-from main import app, mysql, bcrypt, SECRET_KEY, validate
+from main import app, mysql, bcrypt, SECRET_KEY, validate, get
 import MySQLdb.cursors
 import uuid, jwt
 from datetime import datetime
@@ -13,64 +13,53 @@ Get All Posts
 '''
 @app.route('/home', methods=['GET'])
 def home():
-    pass
-    # cursor = mysql.connection.cursor()
-    # cursor.execute('''SELECT Comment.*, User.*
-    #                          FROM Comment
-    #                          LEFT JOIN User
-    #                          ON Comment.user_id = User.user_id
-    #                          ORDER BY parent_id ASC''')
-    # mp = {}
-    # row = cursor.fetchone()
-    # while row:
-    #     comment_user = row['user_id'];
-    #     comment_id = row['comment_id'];
-    #     content = row['content'];
-    #     parent_id = row['parent_id'];
-    #
-    #     print(comment_user, comment_id, content, parent_id)
-    #     if parent_id != 0:
-    #         if parent_id not in mp:
-    #             mp[parent_id] = []
-    #         mp[parent_id].append([comment_id, content])
-    #     row = cursor.fetchone()
-    #
-    # res = []
-    # lst = mp.keys()
-    # for key in lst:
-    #     sublst = mp[key]
-    #
-    #     tmp2 = []
-    #     for item in sublst:
-    #         tmp2.append({
-    #             'Id': item[0],
-    #             'Content': item[1]
-    #         })
-    #
-    #     cursor.execute('''SELECT content FROM Comment WHERE comment_id = 60''')
-    #     content = cursor.fetchone()
-    #     tmp = {
-    #         'Id': key,
-    #         'Content': content['content'],
-    #         'replies': tmp2
-    #     }
-    #     res.append(tmp)
-    #
-    # return jsonify({"Comments": res})
+    auth_token = request.headers.get('Authorization')
+    cur_user_id = decode_auth_token(auth_token)
 
-    # data = request.args
-    # start, limit = data.get('start', 'limit')
-    #
-    # cursor = mysql.connection.cursor()
-    # lst = cursor.execute(''' SELECT * FROM Post LIMIT %s, %s''', (start, limit))
-    # cursor.close()
-    #
-    # res = {
-    #     "posts", lst
-    # }
-    # return make_response(jsonify(res)), 200
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' SELECT * from Post ''')
 
+    all_posts = []
+    cur_post = cursor.fetchone()
+    while cur_post:
+        # processing one post
+        cur_post_data = {}
 
+        user = get.user(cur_post['user_id'])
+
+        reported_person_data = get.lost_person(cur_post['post_id']) if cur_post['is_lost'] else get.found_person(cur_post['post_id'])
+        reported_person_data['address'] = get.address(cur_post['address_id'])
+        reported_person_data['main_photo'], reported_person_data['extra_photos'] = get.post_photos(cur_post['post_id'])
+
+        cur = mysql.connection.cursor()
+        cur.execute(''' SELECT * from Saved_Posts WHERE user_id = %s and post_id = %s ''', (cur_user_id, cur_post['post_id'],))
+        is_saved = cur.fetchone()
+        cur.close()
+
+        cur_post_data = {
+            'post_id': cur_post['post_id'],
+            'user_id': user['user_id'],
+            'username': user['username'],
+            'user_photo': user['photo'],
+            'is_lost': cur_post['is_lost'] == 1,
+            'lost_person_data' if cur_post['is_lost'] else 'found_person_data': reported_person_data,
+            'details': cur_post['more_details'],
+            'is_owner': cur_user_id == cur_post['user_id'],
+            'is_saved': is_saved is not None,
+            'Comments': get.post_comments(cur_post['post_id'])
+        }
+
+        all_posts.append(cur_post_data)
+        cur_post = cursor.fetchone()
+
+    cursor.close()
+
+    start, limit = int(request.args['start']), int(request.args['limit'])
+
+    return make_response(jsonify({
+        'Posts': all_posts[start: start + limit],
+        'status': 200
+    })), 200
 
 '''
 Register New User
@@ -148,7 +137,6 @@ def login():
         return make_response(jsonify(res)), 404
 
 
-
 def encode_auth_token(user_id):
     """
     Generates the Auth Token
@@ -175,27 +163,6 @@ def decode_auth_token(auth_token):
     return payload['sub']
 
 
-def get_user(auth_token):
-    user_id = decode_auth_token(auth_token)
-
-    cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT * FROM User WHERE user_id = %s''', (user_id,))
-    user = cursor.fetchone()
-
-    user_photo_id = user['user_photo_id']
-    cursor.execute(''' SELECT photo FROM User_Photo WHERE user_photo_id = %s''', (user_photo_id,))
-    photo = cursor.fetchone()
-
-    res = {
-        'user_id': user['user_id'],
-        'phone_number': user['phone_number'],
-        'username': user['the_name'],
-        'photo': photo
-    }
-    return res
-
-
-
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     '''
@@ -205,11 +172,17 @@ def forgot_password():
     '''
     data = request.json
     phone_number = data.get('phone_number')
+    is_registered = validate.register_phone_number(phone_number)
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' SELECT the_name FROM User WHERE phone_number = %s ''', (phone_number,))
+    username = cursor.fetchone()
     res = {
-        "Is Registered?": validate.register_phone_number(phone_number)
+        'status': 200,
+        'Is Registered?': is_registered,
+        'username': "" if username is None else username['the_name']
     }
     return make_response(jsonify(res)), 200
-
 
 
 @app.route('/reset_password', methods=['GET', 'POST'])
@@ -231,7 +204,6 @@ def reset_password():
         'message': "تم تحديث كلمة السر",
     }
     return make_response(jsonify(res)), 200
-
 
 
 @app.route("/create-post", methods=['GET', 'POST'])
@@ -256,10 +228,15 @@ def create_post():
     is_lost = data.get('is_lost')
     more_details = data.get('more_details')
     main_photo = data.get('photo')
+
     extra_photos = data.get('extra_photos')
+    if extra_photos is None:
+        extra_photos = []
+
     date = datetime.datetime.now()
-    auth_header = request.headers.get('Authorization')
-    user_data = get_user(auth_header)
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+    user_data = get.user(user_id)
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' INSERT INTO Address(city, district, address_details) VALUES (%s, %s, %s) ''', (city, district, address_details,))
@@ -272,8 +249,12 @@ def create_post():
 
     post_id = cursor.lastrowid
 
-    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo) VALUES (%s, %s) ''', (post_id, user_data['photo']))
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo))
     mysql.connection.commit()
+
+    for cur_photo in extra_photos:
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo))
+        mysql.connection.commit()
 
     if is_lost:
         cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
@@ -287,6 +268,7 @@ def create_post():
         "status": 200,
         "message": "تم نشر المنشور بنجاح",
         "data": {
+            "post_id": post_id,
             "user_id": user_data['user_id'],
             "username": user_data['username'],
             "user_photo": user_data['photo'],
@@ -313,7 +295,7 @@ def create_post():
 @app.route("/update-post", methods=['GET', 'POST'])
 def update_post():
     """
-        Deletes a post
+        Updates a post
         :params: post_id
         :request header: user token
         :request body: name - age - gender -
@@ -334,32 +316,45 @@ def update_post():
     is_lost = data.get('is_lost')
     more_details = data.get('more_details')
     main_photo = data.get('photo')
-    extra_photos = data.get('extra_photos')
-    date = datetime.datetime.now()
-    auth_header = request.headers.get('Authorization')
-    user_data = get_user(auth_header)
 
+    extra_photos = data.get('extra_photos')
+    if extra_photos is None:
+        extra_photos = []
+
+    date = datetime.datetime.now()
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+    user_data = get.user(user_id)
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT address_id,is_lost FROM Post WHERE post_id = %s ''', (post_id,))
+    cursor.execute(''' SELECT address_id, is_lost FROM Post WHERE post_id = %s ''', (post_id,))
     tmp = cursor.fetchone()
     address_id, was_lost = tmp['address_id'], tmp['is_lost']
     cursor.execute(
         ''' UPDATE Address SET city = %s, district = %s, address_details = %s WHERE address_id = %s ''', (city, district, address_details, address_id,))
     mysql.connection.commit()
+
     cursor.execute(
-        ''' UPDATE post_photo SET photo = %s WHERE post_id = %s ''', (user_data['photo'], post_id,))
+        ''' DELETE FROM Post_Photo WHERE post_id = %s ''', (post_id,)
+    )
+
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo,))
     mysql.connection.commit()
+
+    for cur_photo in extra_photos:
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo,))
+        mysql.connection.commit()
+
     cursor.execute(
         ''' UPDATE Post SET is_lost = %s, more_details = %s, date_AND_time = %s WHERE post_id = %s ''', (is_lost, more_details, date, post_id,))
     mysql.connection.commit()
 
     if was_lost:
         cursor.execute(
-            ''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id)
+            ''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id,)
         )
     else:
         cursor.execute(
-            ''' DELETE FROM Found_Person WHERE post_id = %s ''', (post_id)
+            ''' DELETE FROM Found_Person WHERE post_id = %s ''', (post_id,)
         )
 
     mysql.connection.commit()
@@ -399,13 +394,20 @@ def update_post():
 
 @app.route("/delete-post", methods=['GET', 'POST'])
 def delete_post():
+    '''
+    Deletes a post
+    '''
     post_id = request.args['post_id']
 
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT address_id FROM Post WHERE post_id =  %s ''', (post_id,))
-    address_id = cursor.fetchone()
+    cursor.execute(''' SELECT address_id, is_lost FROM Post WHERE post_id =  %s ''', (post_id,))
+    data = cursor.fetchone()
+    address_id, is_lost = data['address_id'], data['is_lost']
 
-    cursor.execute(''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id,))
+    if is_lost:
+        cursor.execute(''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id,))
+    else:
+        cursor.execute(''' DELETE FROM Found_Person WHERE post_id = %s ''', (post_id,))
     mysql.connection.commit()
     cursor.execute(''' DELETE FROM Post_Photo WHERE post_id = %s ''', (post_id,))
     mysql.connection.commit()
@@ -416,4 +418,42 @@ def delete_post():
 
     cursor.close()
 
+    res = {
+        "message": "تم حذف المنشور بنجاح",
+        "status": 200
+    }
+    return make_response(jsonify(res)), 200
 
+@app.route("/save-post", methods=['GET', 'POST'])
+def save_post():
+    post_id = request.args['post_id']
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' INSERT INTO Saved_Posts(user_id, post_id) VALUES (%s, %s) ''', (user_id, post_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+    res = {
+        "message": "تم إضافة المنشور إلى منشوراتك المحفوظة",
+        "status": 200
+    }
+    return make_response(jsonify(res)), 200
+
+@app.route("/unsave-post", methods=['GET', 'POST'])
+def unsave_post():
+    post_id = request.args['post_id']
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' DELETE FROM Saved_Posts WHERE user_id = %s and post_id = %s ''', (user_id, post_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+    res = {
+        "message": "تم إزالة المنشور من منشوراتك المحفوظة",
+        "status": 200
+    }
+    return make_response(jsonify(res)), 200
