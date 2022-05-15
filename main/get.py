@@ -1,6 +1,7 @@
 from main import mysql
 from flask import json, jsonify, make_response
 
+
 def user(user_id):
 
     cursor = mysql.connection.cursor()
@@ -10,12 +11,12 @@ def user(user_id):
     photo = user_photo(user['user_photo_id'])
 
     res = {
-        'user_id': user['user_id'],
         'phone_number': user['phone_number'],
         'username': user['the_name'],
         'photo': None if photo is None else photo['photo']
     }
     return res
+
 
 def user_photo(user_photo_id):
     cursor = mysql.connection.cursor()
@@ -23,6 +24,7 @@ def user_photo(user_photo_id):
     data = cursor.fetchone()
     cursor.close()
     return data
+
 
 def address(address_id):
     cursor = mysql.connection.cursor()
@@ -37,6 +39,7 @@ def address(address_id):
     }
     return res
 
+
 def lost_person(post_id):
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * FROM Lost_Person WHERE post_id = %s''', (post_id,))
@@ -49,6 +52,7 @@ def lost_person(post_id):
         'gender': data['gender']
     }
     return res
+
 
 def found_person(post_id):
     cursor = mysql.connection.cursor()
@@ -63,12 +67,14 @@ def found_person(post_id):
     }
     return res
 
+
 def post(post_id):
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * FROM Post WHERE post_id = %s''', (post_id,))
     data = cursor.fetchone()
     cursor.close()
     return data
+
 
 def post_photos(post_id):
     cursor = mysql.connection.cursor()
@@ -84,12 +90,14 @@ def post_photos(post_id):
     cursor.close()
     return main_photo, photos
 
+
 def comment(comment_id):
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * FROM Comment WHERE comment_id = %s''', (comment_id,))
     data = cursor.fetchone()
     cursor.close()
     return data
+
 
 def post_comments(post_id):
     cursor = mysql.connection.cursor()
@@ -137,3 +145,47 @@ def post_comments(post_id):
 
     cursor.close()
     return all_comments
+
+
+def posts(cursor, cur_user_id, start, limit):
+
+    all_posts = []
+    cur_post = cursor.fetchone()
+ #   print(cur_post)
+    while cur_post:
+        # processing one post
+        cur_post_data = {}
+
+        user_data = user(cur_post['user_id'])
+
+        reported_person_data = lost_person(cur_post['post_id']) if cur_post['is_lost'] else found_person(cur_post['post_id'])
+        reported_person_data['address'] = address(cur_post['address_id'])
+        reported_person_data['main_photo'], reported_person_data['extra_photos'] = post_photos(cur_post['post_id'])
+
+        cur = mysql.connection.cursor()
+        cur.execute(''' SELECT * from Saved_Posts WHERE user_id = %s and post_id = %s ''',(cur_user_id, cur_post['post_id'],))
+        is_saved = cur.fetchone()
+        cur.close()
+
+        cur_post_data = {
+            'post_id': cur_post['post_id'],
+            'user_id': cur_post['user_id'],
+            'username': user_data['username'],
+            'user_photo': user_data['photo'],
+            'is_lost': cur_post['is_lost'] == 1,
+            'lost_person_data' if cur_post['is_lost'] else 'found_person_data': reported_person_data,
+            'details': cur_post['more_details'],
+            'is_owner': cur_user_id == cur_post['user_id'],
+            'is_saved': is_saved is not None,
+            'Comments': post_comments(cur_post['post_id'])
+        }
+
+        all_posts.append(cur_post_data)
+        cur_post = cursor.fetchone()
+
+    cursor.close()
+
+    return make_response(jsonify({
+        'Posts': all_posts[start: start + limit],
+        'status': 200
+    })), 200

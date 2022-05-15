@@ -11,55 +11,32 @@ auth_blueprint = Blueprint('main', __name__)
 '''
 Get All Posts
 '''
-@app.route('/home', methods=['GET'])
-def home():
+@app.route('/get-all-posts', methods=['GET'])
+def get_all_posts():
     auth_token = request.headers.get('Authorization')
-    cur_user_id = decode_auth_token(auth_token)
+    user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * from Post ''')
 
-    all_posts = []
-    cur_post = cursor.fetchone()
-    while cur_post:
-        # processing one post
-        cur_post_data = {}
+    start = int(request.args['start'])
+    limit = int(request.args['limit'])
+    return get.posts(cursor, user_id, start, limit)
 
-        user = get.user(cur_post['user_id'])
 
-        reported_person_data = get.lost_person(cur_post['post_id']) if cur_post['is_lost'] else get.found_person(cur_post['post_id'])
-        reported_person_data['address'] = get.address(cur_post['address_id'])
-        reported_person_data['main_photo'], reported_person_data['extra_photos'] = get.post_photos(cur_post['post_id'])
+@app.route('/get-saved-posts', methods=['GET'])
+def get_saved_posts():
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
 
-        cur = mysql.connection.cursor()
-        cur.execute(''' SELECT * from Saved_Posts WHERE user_id = %s and post_id = %s ''', (cur_user_id, cur_post['post_id'],))
-        is_saved = cur.fetchone()
-        cur.close()
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' SELECT Post.*, Saved_Posts.* FROM Saved_Posts LEFT JOIN Post
+                        ON Saved_Posts.post_id = Post.post_id WHERE Saved_Posts.user_id = %s ''', (user_id,))
 
-        cur_post_data = {
-            'post_id': cur_post['post_id'],
-            'user_id': user['user_id'],
-            'username': user['username'],
-            'user_photo': user['photo'],
-            'is_lost': cur_post['is_lost'] == 1,
-            'lost_person_data' if cur_post['is_lost'] else 'found_person_data': reported_person_data,
-            'details': cur_post['more_details'],
-            'is_owner': cur_user_id == cur_post['user_id'],
-            'is_saved': is_saved is not None,
-            'Comments': get.post_comments(cur_post['post_id'])
-        }
+    start = int(request.args['start'])
+    limit = int(request.args['limit'])
+    return get.posts(cursor, user_id, start, limit)
 
-        all_posts.append(cur_post_data)
-        cur_post = cursor.fetchone()
-
-    cursor.close()
-
-    start, limit = int(request.args['start']), int(request.args['limit'])
-
-    return make_response(jsonify({
-        'Posts': all_posts[start: start + limit],
-        'status': 200
-    })), 200
 
 '''
 Register New User
@@ -244,7 +221,7 @@ def create_post():
 
     address_id = cursor.lastrowid
 
-    cursor.execute(''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id) VALUES (%s, %s, %s, %s, %s) ''', (is_lost, more_details, date, address_id, user_data['user_id'],))
+    cursor.execute(''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id) VALUES (%s, %s, %s, %s, %s) ''', (is_lost, more_details, date, address_id, user_id,))
     mysql.connection.commit()
 
     post_id = cursor.lastrowid
@@ -260,8 +237,11 @@ def create_post():
         cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
     else:
         cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
-
     mysql.connection.commit()
+
+    cursor.execute(''' INSERT INTO User_Posts(user_id, post_id) VALUES (%s, %s) ''', (user_id, post_id,))
+    mysql.connection.commit()
+
     cursor.close()
 
     res = {
@@ -269,7 +249,7 @@ def create_post():
         "message": "تم نشر المنشور بنجاح",
         "data": {
             "post_id": post_id,
-            "user_id": user_data['user_id'],
+            "user_id": user_id,
             "username": user_data['username'],
             "user_photo": user_data['photo'],
             "user_phone_number": user_data['phone_number'],
@@ -327,8 +307,8 @@ def update_post():
     user_data = get.user(user_id)
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT address_id, is_lost FROM Post WHERE post_id = %s ''', (post_id,))
-    tmp = cursor.fetchone()
-    address_id, was_lost = tmp['address_id'], tmp['is_lost']
+    data = cursor.fetchone()
+    address_id, was_lost = data['address_id'], data['is_lost']
     cursor.execute(
         ''' UPDATE Address SET city = %s, district = %s, address_details = %s WHERE address_id = %s ''', (city, district, address_details, address_id,))
     mysql.connection.commit()
@@ -369,7 +349,7 @@ def update_post():
         "status": 200,
         "message": "تم تحديث المنشور بنجاح",
         "data": {
-            "user_id": user_data['user_id'],
+            "user_id": user_id,
             "username": user_data['username'],
             "user_photo": user_data['photo'],
             "user_phone_number": user_data['phone_number'],
