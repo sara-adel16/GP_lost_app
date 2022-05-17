@@ -52,21 +52,6 @@ def click_post():
     return get.posts(cursor, user_id, start, limit, True)
 
 
-@app.route('/click-saved-post', methods=['GET'])
-def click_saved_post():
-    post_id = request.args.get('post_id')
-    auth_token = request.headers.get('Authorization')
-    user_id = decode_auth_token(auth_token)
-
-    cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT Post.*, Saved_Posts.* FROM Saved_Posts LEFT JOIN Post
-                            ON Saved_Posts.post_id = Post.post_id WHERE Saved_Posts.user_id = %s ''', (user_id,))
-
-    start, limit = 0, 1
-
-    return get.posts(cursor, user_id, start, limit, True)
-
-
 '''
 Register New User
 '''
