@@ -40,7 +40,7 @@ def registration(form):
         }
         return make_response(jsonify(res)), 202
 
-    if register_email(email):
+    if email is not None and email != "" and register_email(email):
         res = {
             'status': 409,
             'message': "هذا البريد الإلكتروني مُستخدم",

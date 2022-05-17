@@ -60,7 +60,7 @@ def register():
     data = request.json
     username = data.get('username')
     phone_number = data.get('phone_number')
-    email = data.get('email') if data.get('email') is not None else ""
+    email = data.get('email')
     password = data.get('password')
 
     res = validate.registration(data)
@@ -88,6 +88,18 @@ def register():
     }
     return make_response(jsonify(res)), 200
 
+
+@app.route('/delete-user', methods=['POST'])
+def delete_user():
+    phone_number = request.json.get('phone_number')
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' DELETE FROM user WHERE phone_number = %s ''', (phone_number,))
+    mysql.connection.commit()
+    cursor.close()
+    return make_response(jsonify({
+        'status': 200,
+        'message': 'تم حذف المستخدم بنجاح'
+    })), 200
 
 '''
 Login
@@ -163,15 +175,19 @@ def forgot_password():
     '''
     data = request.json
     phone_number = data.get('phone_number')
-    is_registered = validate.register_phone_number(phone_number)
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT the_name FROM User WHERE phone_number = %s ''', (phone_number,))
     username = cursor.fetchone()
+    is_registered = username is not None
+
     res = {
         'status': 200,
-        'Is Registered?': is_registered,
-        'username': "" if username is None else username['the_name']
+        'message': 'هذا الرقم مسجل بالفعل' if is_registered else 'هذا الرقم غير مسجل',
+        'data': {
+            'is_registered': is_registered,
+            'username': "" if username is None else username['the_name']
+        }
     }
     return make_response(jsonify(res)), 200
 
