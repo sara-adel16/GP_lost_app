@@ -109,7 +109,7 @@ def comment(comment_id):
     return data
 
 
-def post_comments(post_id):
+def post_comments(post_id, cur_user_id):
     cursor = mysql.connection.cursor()
     cursor.execute('''SELECT * FROM Comment WHERE post_id = %s ORDER BY parent_id ASC''', (post_id,))
     main_comments = {}
@@ -119,6 +119,7 @@ def post_comments(post_id):
         parent_id = cur_comment['parent_id'];
         content = cur_comment['content']
         user_id = cur_comment['user_id']
+        data = cur_comment['date_AND_time']
 
         user_data = user(user_id)
 
@@ -126,10 +127,12 @@ def post_comments(post_id):
             main_comments[comment_id] = []
         else:
             main_comments[parent_id].append({
-                'id': comment_id,
+                'comment_id': comment_id,
                 'username': user_data['username'],
-                'photo': user_data['photo'],
+                'user_photo': user_data['photo'],
                 'Content': content,
+                'date': data,
+                'is_owner': cur_user_id == user_id
             })
         cur_comment = cursor.fetchone()
 
@@ -138,18 +141,21 @@ def post_comments(post_id):
     for id in ids_lst:
         replies = main_comments[id]
 
-        cursor.execute('''SELECT content, user_id FROM Comment WHERE comment_id = %s''', (id,))
-        data = cursor.fetchone()
-        content, user_id = data['content'], data['user_id']
-
+        comment_data = comment(id)
         user_data = user(user_id)
 
+        content = comment_data['content']
+        user_id = comment_data['user_id']
+        date = comment_data['date_AND_time']
+
         cur_comment_data = {
-            'id': id,
+            'comment_id': id,
             'username': user_data['username'],
-            'photo': user_data['photo'],
+            'user_photo': user_data['photo'],
             'Content': content,
-            'replies': replies
+            'replies': replies,
+            'date': date,
+            'is_owner': cur_user_id == user_id
         }
         all_comments.append(cur_comment_data)
 
@@ -195,7 +201,7 @@ def posts(cursor, cur_user_id, start, limit, full_data):
         }
 
         if full_data:
-            cur_post_data['comments'] = post_comments(cur_post['post_id'])
+            cur_post_data['comments'] = post_comments(cur_post['post_id'], cur_user_id)
 
         all_posts.append(cur_post_data)
         cur_post = cursor.fetchone()
