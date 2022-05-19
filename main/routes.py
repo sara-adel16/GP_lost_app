@@ -635,11 +635,11 @@ def update_profile():
         cursor.execute(''' UPDATE User SET the_name = %s WHERE user_id = %s ''', (username, user_id,))
         mysql.connection.commit()
 
-    if phone_number != "":
+    if phone_number != "" and not validate.register_phone_number(phone_number):
         cursor.execute(''' UPDATE User SET phone_number = %s WHERE user_id = %s ''', (phone_number, user_id,))
         mysql.connection.commit()
 
-    if email != "":
+    if email != "" and not validate.register_email(email):
         cursor.execute(''' UPDATE User SET email = %s WHERE user_id = %s ''', (email, user_id,))
         mysql.connection.commit()
 
