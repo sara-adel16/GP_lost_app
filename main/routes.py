@@ -100,7 +100,7 @@ def register():
     return make_response(jsonify(res)), 200
 
 
-@app.route('/delete-user', methods=['POST'])
+@app.route('/delete-user', methods=['DEL'])
 def delete_user():
     phone_number = request.json.get('phone_number')
     cursor = mysql.connection.cursor()
@@ -489,7 +489,7 @@ def create_comment():
 
     # take data from params: parent_id, post_id
     params = request.args
-    post_id = params.get('post_id')
+    post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
     # take data from body: content
     content = request.json['content']
@@ -506,12 +506,15 @@ def create_comment():
     mysql.connection.commit()
     cursor.close()
 
+    comment_id = cursor.lastrowid
+
     # user data: username, photo
     user_data = get.user(user_id)
     res = {
         'status': 200,
         'message': 'تم نشر التعليق بنجاح',
         'data': {
+            'comment_id': comment_id,
             'content': content,
             'user_id': user_id,
             'post_id': post_id,
@@ -527,7 +530,7 @@ def update_comment():
 
     # take data from params: comment_id, parent_id, post_id
     params = request.args
-    post_id = params.get('post_id')
+    post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
     comment_id = params.get('comment_id')
     # take data from body: content
@@ -568,7 +571,7 @@ def update_comment():
 def delete_comment():
     # take data from params: comment_id, parent_id, post_id
     params = request.args
-    post_id = params.get('post_id')
+    post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
     comment_id = params.get('comment_id')
 
@@ -610,7 +613,7 @@ def profile():
 
     tmp_res = get.user(user_id)
     tmp_res['posts'] = get.posts(cursor, user_id, start, limit, False)
-    print(tmp_res)
+
     res = {
         'status': 200,
         'data': tmp_res

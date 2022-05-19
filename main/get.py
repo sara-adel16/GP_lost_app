@@ -131,7 +131,7 @@ def post_comments(post_id, cur_user_id):
                 'comment_id': comment_id,
                 'username': user_data['username'],
                 'user_photo': user_data['photo'],
-                'Content': content,
+                'content': content,
                 'date': data,
                 'is_owner': cur_user_id == user_id
             })
@@ -153,7 +153,7 @@ def post_comments(post_id, cur_user_id):
             'comment_id': id,
             'username': user_data['username'],
             'user_photo': user_data['photo'],
-            'Content': content,
+            'content': content,
             'replies': replies,
             'date': date,
             'is_owner': cur_user_id == user_id
