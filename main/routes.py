@@ -21,7 +21,11 @@ def get_all_posts():
 
     start = int(request.args.get('start'))
     limit = int(request.args.get('limit'))
-    return get.posts(cursor, user_id, start, limit, False)
+
+    res = {}
+    res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    res['status'] = 200
+    return make_response(jsonify(res)), 200
 
 
 @app.route('/get-saved-posts', methods=['GET'])
@@ -35,7 +39,11 @@ def get_saved_posts():
 
     start = int(request.args.get('start'))
     limit = int(request.args.get('limit'))
-    return get.posts(cursor, user_id, start, limit, False)
+
+    res = {}
+    res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    res['status'] = 200
+    return make_response(jsonify(res)), 200
 
 
 @app.route('/click-post', methods=['GET'])
@@ -49,7 +57,10 @@ def click_post():
 
     start, limit = 0, 1
 
-    return get.posts(cursor, user_id, start, limit, True)
+    res = {}
+    res['post'] = get.posts(cursor, user_id, start, limit, True)
+    res['status'] = 200
+    return make_response(jsonify(res)), 200
 
 
 '''
@@ -213,7 +224,7 @@ def reset_password():
     return make_response(jsonify(res)), 200
 
 
-@app.route("/create-post", methods=['GET', 'POST'])
+@app.route("/create-post", methods=['POST'])
 def create_post():
     """
     Creates new post
@@ -234,9 +245,10 @@ def create_post():
     address_details = data.get('address_details')
     is_lost = data.get('is_lost')
     more_details = data.get('more_details')
-    main_photo = data.get('photo')
 
+    main_photo = data.get('photo')
     extra_photos = data.get('extra_photos')
+
     if extra_photos is None:
         extra_photos = []
 
@@ -267,9 +279,6 @@ def create_post():
         cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
     else:
         cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
-    mysql.connection.commit()
-
-    cursor.execute(''' INSERT INTO User_Posts(user_id, post_id) VALUES (%s, %s) ''', (user_id, post_id,))
     mysql.connection.commit()
 
     cursor.close()
@@ -303,7 +312,7 @@ def create_post():
     return make_response(jsonify(res)), 200
 
 
-@app.route("/update-post", methods=['GET', 'POST'])
+@app.route("/update-post", methods=['PUT'])
 def update_post():
     """
         Updates a post
@@ -406,7 +415,7 @@ def update_post():
     return make_response(jsonify(res)), 200
 
 
-@app.route("/delete-post", methods=['GET', 'POST'])
+@app.route("/delete-post", methods=['DELETE'])
 def delete_post():
     '''
     Deletes a post
@@ -418,6 +427,8 @@ def delete_post():
     data = cursor.fetchone()
     address_id, is_lost = data['address_id'], data['is_lost']
 
+    cursor.execute(''' DELETE FROM Saved_Posts WHERE post_id = %s ''', (post_id,))
+    mysql.connection.commit()
     if is_lost:
         cursor.execute(''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id,))
     else:
@@ -438,7 +449,7 @@ def delete_post():
     }
     return make_response(jsonify(res)), 200
 
-@app.route("/save-post", methods=['GET', 'POST'])
+@app.route("/save-post", methods=['POST'])
 def save_post():
     post_id = request.args['post_id']
     auth_token = request.headers.get('Authorization')
@@ -455,7 +466,7 @@ def save_post():
     }
     return make_response(jsonify(res)), 200
 
-@app.route("/unsave-post", methods=['GET', 'POST'])
+@app.route("/unsave-post", methods=['DELETE'])
 def unsave_post():
     post_id = request.args['post_id']
     auth_token = request.headers.get('Authorization')
@@ -511,7 +522,7 @@ def create_comment():
     }
     return make_response(jsonify(res)), 200
 
-@app.route("/update-comment", methods=['POST'])
+@app.route("/update-comment", methods=['PUT'])
 def update_comment():
 
     # take data from params: comment_id, parent_id, post_id
@@ -553,7 +564,7 @@ def update_comment():
     return make_response(jsonify(res)), 200
 
 
-@app.route("/delete-comment", methods=['POST'])
+@app.route("/delete-comment", methods=['DELETE'])
 def delete_comment():
     # take data from params: comment_id, parent_id, post_id
     params = request.args
@@ -582,5 +593,67 @@ def delete_comment():
     res = {
         'status': 200,
         'message': 'تم حذف التعليق بنجاح',
+    }
+    return make_response(jsonify(res)), 200
+
+
+@app.route("/profile", methods=['GET'])
+def profile():
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+
+    start = int(request.args.get('start'))
+    limit = int(request.args.get('limit'))
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(''' SELECT * FROM Post WHERE user_id = %s ''', (user_id,))
+
+    tmp_res = get.user(user_id)
+    tmp_res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    print(tmp_res)
+    res = {
+        'status': 200,
+        'data': tmp_res
+    }
+    return make_response(jsonify(res)), 200
+
+
+@app.route("/update-profile", methods=['PUT'])
+def update_profile():
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+
+    data = request.json
+    username = data.get('username')
+    phone_number = data.get('phone_number')
+    email = data.get('email')
+    profile_photo = data.get('profile_photo')
+
+    cursor = mysql.connection.cursor()
+
+    if username != "":
+        cursor.execute(''' UPDATE User SET the_name = %s WHERE user_id = %s ''', (username, user_id,))
+        mysql.connection.commit()
+
+    if phone_number != "":
+        cursor.execute(''' UPDATE User SET phone_number = %s WHERE user_id = %s ''', (phone_number, user_id,))
+        mysql.connection.commit()
+
+    if email != "":
+        cursor.execute(''' UPDATE User SET email = %s WHERE user_id = %s ''', (email, user_id,))
+        mysql.connection.commit()
+
+    if profile_photo != "":
+        cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
+        data = cursor.fetchone()
+        user_photo_id = data['user_photo_id']
+        cursor.execute(''' UPDATE user_photo SET photo = %s WHERE user_photo_id = %s ''', (profile_photo, user_photo_id,))
+        mysql.connection.commit()
+
+    cursor.close()
+
+    res = {
+        'status': 200,
+        'message': 'تم تحديث ملفك الشخصي بنجاح'
     }
     return make_response(jsonify(res)), 200

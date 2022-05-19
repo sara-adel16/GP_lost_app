@@ -13,7 +13,8 @@ def user(user_id):
     res = {
         'phone_number': user['phone_number'],
         'username': user['the_name'],
-        'photo': photo
+        'photo': photo,
+        'email': user['email']
     }
     return res
 
@@ -209,12 +210,8 @@ def posts(cursor, cur_user_id, start, limit, full_data):
     cursor.close()
 
     if full_data:
-        return make_response(jsonify({
-            'post': cur_post_data,
-            'status': 200
-        })), 200
+        res = cur_post_data
     else:
-        return make_response(jsonify({
-            'posts': all_posts[start: start + limit],
-            'status': 200
-        })), 200
+        res = all_posts[start: start + limit]
+
+    return res
