@@ -63,24 +63,26 @@ def click_post():
     return make_response(jsonify(res)), 200
 
 
-'''
-Register New User
-'''
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    '''
+    Registers New User
+    '''
     data = request.json
     username = data.get('username')
     phone_number = data.get('phone_number')
     email = data.get('email')
     password = data.get('password')
 
-    res = validate.registration(data)
+    res = validate.user_data(data)
     if res is not None:
-        return res
+        return make_response(jsonify(res))
 
     cursor = mysql.connection.cursor()
     cursor.execute(
-        ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id) VALUES (%s, %s, %s, %s, NULL) ''', (username, phone_number, password, email,))
+        ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id) VALUES (%s, %s, %s, %s, NULL) ''',
+        (username, phone_number, password, email,)
+    )
 
     user_id = cursor.lastrowid
 
@@ -235,7 +237,7 @@ def create_post():
     :return: user data & lost/found person data
     """
 
-    data = request.json
+    data = json.loads(request.form.get('data'))
 
     name = data.get('name')
     age = data.get('age')
@@ -246,10 +248,10 @@ def create_post():
     is_lost = data.get('is_lost')
     more_details = data.get('more_details')
 
-    main_photo = data.get('photo')
-    extra_photos = data.get('extra_photos')
+    main_photo = request.files.get('main_photo')
+    extra_photos = request.files.getlist('extra_photos')
 
-    if extra_photos is None:
+    if extra_photos[0].filename == "":
         extra_photos = []
 
     date = datetime.datetime.now()
@@ -271,9 +273,12 @@ def create_post():
     cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo))
     mysql.connection.commit()
 
+    extra_photos_paths = []
     for cur_photo in extra_photos:
         cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo))
         mysql.connection.commit()
+
+        extra_photos_paths.append(get.path(cur_photo.filename))
 
     if is_lost:
         cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
@@ -302,8 +307,8 @@ def create_post():
                     "district": district,
                     "address_details": address_details
                 },
-                "main_photo": main_photo,
-                "extra_photos": extra_photos
+                "main_photo": get.path(main_photo.filename),
+                "extra_photos": extra_photos_paths
             },
             "more_details": more_details,
             "date": date
@@ -324,8 +329,8 @@ def update_post():
         :return: user data & lost/found person data
     """
 
-    post_id = request.args['post_id']
-    data = request.json
+    post_id = request.args.get('post_id')
+    data = json.loads(request.form.get('data'))
 
     name = data.get('name')
     age = data.get('age')
@@ -335,10 +340,11 @@ def update_post():
     address_details = data.get('address_details')
     is_lost = data.get('is_lost')
     more_details = data.get('more_details')
-    main_photo = data.get('photo')
 
-    extra_photos = data.get('extra_photos')
-    if extra_photos is None:
+    main_photo = request.files.get('main_photo')
+    extra_photos = request.files.getlist('extra_photos')
+
+    if extra_photos[0].filename == "":
         extra_photos = []
 
     auth_token = request.headers.get('Authorization')
@@ -362,9 +368,12 @@ def update_post():
     cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo,))
     mysql.connection.commit()
 
+    extra_photos_paths = []
     for cur_photo in extra_photos:
         cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo,))
         mysql.connection.commit()
+
+        extra_photos_paths.append(get.path(cur_photo.filename))
 
     cursor.execute(
         ''' UPDATE Post SET is_lost = %s, more_details = %s WHERE post_id = %s ''', (is_lost, more_details, post_id,))
@@ -405,8 +414,8 @@ def update_post():
                     "district": district,
                     "address_details": address_details
                 },
-                "main_photo": main_photo,
-                "extra_photos": extra_photos
+                "main_photo": get.path(main_photo.filename),
+                "extra_photos": extra_photos_paths
             },
             "more_details": more_details,
             "date": date
@@ -420,7 +429,7 @@ def delete_post():
     '''
     Deletes a post
     '''
-    post_id = request.args['post_id']
+    post_id = request.args.get('post_id')
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT address_id, is_lost FROM Post WHERE post_id =  %s ''', (post_id,))
@@ -451,7 +460,7 @@ def delete_post():
 
 @app.route("/save-post", methods=['POST'])
 def save_post():
-    post_id = request.args['post_id']
+    post_id = request.args.get('post_id')
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
@@ -486,18 +495,18 @@ def unsave_post():
 
 @app.route("/create-comment", methods=['POST'])
 def create_comment():
-
-    # take data from params: parent_id, post_id
+    '''
+    Creates a new comment to a specific post
+    '''
     params = request.args
     post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
-    # take data from body: content
+
     content = request.json['content']
-    # take token from headers
+
     auth_token = request.headers.get('Authorization')
-    # generate user_id from token
     user_id = decode_auth_token(auth_token)
-    # generate date and time
+
     date = datetime.datetime.now()
 
     cursor = mysql.connection.cursor()
@@ -508,7 +517,6 @@ def create_comment():
 
     comment_id = cursor.lastrowid
 
-    # user data: username, photo
     user_data = get.user(user_id)
     res = {
         'status': 200,
@@ -527,17 +535,17 @@ def create_comment():
 
 @app.route("/update-comment", methods=['PUT'])
 def update_comment():
-
-    # take data from params: comment_id, parent_id, post_id
+    '''
+    Updates a comment
+    '''
     params = request.args
     post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
     comment_id = params.get('comment_id')
-    # take data from body: content
+
     content = request.json['content']
-    # take token from headers
+
     auth_token = request.headers.get('Authorization')
-    # generate user_id from token
     user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
@@ -550,7 +558,6 @@ def update_comment():
     date = data['date_AND_time']
     cursor.close()
 
-    # user data: username, photo
     user_data = get.user(user_id)
     res = {
         'status': 200,
@@ -569,15 +576,15 @@ def update_comment():
 
 @app.route("/delete-comment", methods=['DELETE'])
 def delete_comment():
-    # take data from params: comment_id, parent_id, post_id
+    '''
+    Deletes a comment
+    '''
     params = request.args
     post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
     comment_id = params.get('comment_id')
 
-    # take token from headers
     auth_token = request.headers.get('Authorization')
-    # generate user_id from token
     user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
@@ -626,23 +633,31 @@ def update_profile():
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
-    data = request.json
+    data = json.loads(request.form.get('data'))
     username = data.get('username')
     phone_number = data.get('phone_number')
     email = data.get('email')
-    profile_photo = data.get('profile_photo')
+
+    profile_photo = request.files.get('profile_photo')
 
     cursor = mysql.connection.cursor()
+
+    res = validate.user_data(data)
+    if res is not None:
+        if res['status'] == 202:
+            res['message'] = "هذا الرقم مسجل بالفعل"
+        res['status'] = 409
+        return make_response(jsonify(res)), 409
 
     if username != "":
         cursor.execute(''' UPDATE User SET the_name = %s WHERE user_id = %s ''', (username, user_id,))
         mysql.connection.commit()
 
-    if phone_number != "" and not validate.register_phone_number(phone_number):
+    if phone_number != "":
         cursor.execute(''' UPDATE User SET phone_number = %s WHERE user_id = %s ''', (phone_number, user_id,))
         mysql.connection.commit()
 
-    if email != "" and not validate.register_email(email):
+    if email != "":
         cursor.execute(''' UPDATE User SET email = %s WHERE user_id = %s ''', (email, user_id,))
         mysql.connection.commit()
 
