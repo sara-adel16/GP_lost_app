@@ -20,12 +20,14 @@ def get_all_posts():
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * from Post ''')
+    posts = cursor.fetchall()
+    cursor.close()
 
     start = int(request.args.get('start'))
     limit = int(request.args.get('limit'))
 
     res = {}
-    res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    res['posts'] = get.posts(posts, user_id, start, limit, False)
     res['status'] = 200
     return make_response(jsonify(res)), 200
 
@@ -41,12 +43,14 @@ def get_saved_posts():
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT Post.*, Saved_Posts.* FROM Saved_Posts LEFT JOIN Post
                         ON Saved_Posts.post_id = Post.post_id WHERE Saved_Posts.user_id = %s ''', (user_id,))
+    posts = cursor.fetchall()
+    cursor.close()
 
     start = int(request.args.get('start'))
     limit = int(request.args.get('limit'))
 
     res = {}
-    res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    res['posts'] = get.posts(posts, user_id, start, limit, False)
     res['status'] = 200
     return make_response(jsonify(res)), 200
 
@@ -62,11 +66,13 @@ def click_post():
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * from Post WHERE post_id = %s ''', (post_id,))
+    posts = cursor.fetchall()
+    cursor.close()
 
     start, limit = 0, 1
 
     res = {}
-    res['post'] = get.posts(cursor, user_id, start, limit, True)
+    res['post'] = get.posts(posts, user_id, start, limit, True)
     res['status'] = 200
     return make_response(jsonify(res)), 200
 
@@ -110,7 +116,7 @@ def register():
     return make_response(jsonify(res)), 200
 
 
-@app.route('/delete-user', methods=['DELETE'])
+@app.route('/delete-user', methods=['PUT'])
 def delete_user():
     phone_number = request.json.get('phone_number')
     cursor = mysql.connection.cursor()
@@ -119,7 +125,7 @@ def delete_user():
     cursor.close()
     return make_response(jsonify({
         'status': 200,
-        'message': 'تم حذف المستخدم'
+        'message': ' تم حذف المستخدم بنجاح'
     })), 200
 
 
@@ -241,38 +247,65 @@ def reset_password():
 @app.route("/search", methods=['POST'])
 def search():
     data = json.loads(request.form.get('data'))
-
-    name = data.get('name')
-    age = data.get('age')
-    gender = data.get('gender')
-    city = data.get('city')
-    district = data.get('district')
-    address_details = data.get('address_details')
     is_lost = data.get('is_lost')
-    more_details = data.get('more_details')
 
-    main_photo = request.files.get('main_photo')
-    extra_photos = request.files.getlist('extra_photos')
+    file = request.files.get('main_photo')
+    unknown_photo = face_recognition.load_image_file(file)
+    unknown_face_encoding = face_recognition.face_encodings(unknown_photo)[0]
 
-    if extra_photos[0].filename == "":
-        extra_photos = []
-
-    unknown_image = face_recognition.load_image_file(
-        'C:/Users/YourPc/python face reco/face_recognition_examples/img/unknown/2.jpg')
-    unknown_face_encoding = face_recognition.face_encodings(unknown_image)[0]
-
-    image_of_khedr = face_recognition.load_image_file(
-        'C:/Users/YourPc/python face reco/face_recognition_examples/img/known/khedr.jpeg')
-    khedr_face_encoding = face_recognition.face_encodings(image_of_khedr)[0]
-
-    # Compare faces
-    results = face_recognition.compare_faces([khedr_face_encoding], unknown_face_encoding)
-    print(type(results[0]))
-
-    if results[0]:
-        print('This is khedr')
+    cursor = mysql.connection.cursor()
+    if is_lost:
+        cursor.execute(''' SELECT * FROM Found_Person ''')
     else:
-        print('This is NOT khedr')
+        cursor.execute(''' SELECT * FROM Lost_Person ''')
+
+    target_posts = []
+    all_people = cursor.fetchall()
+    for cur_person in all_people:
+        post_id = cur_person['post_id']
+        cursor.execute(''' SELECT photo FROM Post_Photo WHERE post_id = %s ''', (post_id,))
+        post_photos = cursor.fetchall()
+
+        known_faces_encoding = []
+        for cur_photo in post_photos:
+            if cur_photo['photo'] is None:
+                continue;
+            file = cur_photo['photo'].decode('UTF-8')
+            file_name = app.root_path + '\\' + get.path(get.filename(file))
+            known_photo = face_recognition.load_image_file(file_name)
+            known_faces_encoding.append(face_recognition.face_encodings(known_photo)[0])
+
+        # Compare faces
+        results = face_recognition.compare_faces(known_faces_encoding, unknown_face_encoding)
+
+        right_target = False
+        for cur_photo_res in results:
+            right_target |= cur_photo_res
+
+        if right_target:
+            cursor.execute(''' SELECT * FROM Post WHERE post_id = %s ''', (post_id,))
+            post_data = cursor.fetchone()
+            target_posts.append(post_data)
+
+    if len(target_posts):
+        start = int(request.args.get('start'))
+        limit = int(request.args.get('limit'))
+        auth_token = request.headers.get('Authorization')
+        user_id = decode_auth_token(auth_token)
+
+        posts = get.posts(target_posts, user_id, start, limit, False)
+        res = {
+            'posts': posts,
+            'status': 200,
+            'message': 'تم العثور على بعض النتائج'
+        }
+    else:
+        res = {
+            'status': 200,
+            'message': 'لم يتم العثور على أي نتائج'
+        }
+
+    return make_response(jsonify(res)), 200
 
 
 @app.route("/create-post", methods=['POST'])
@@ -678,9 +711,11 @@ def profile():
 
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT * FROM Post WHERE user_id = %s ''', (user_id,))
+    posts = cursor.fetchall()
+    cursor.close()
 
     tmp_res = get.user(user_id)
-    tmp_res['posts'] = get.posts(cursor, user_id, start, limit, False)
+    tmp_res['posts'] = get.posts(posts, user_id, start, limit, False)
 
     res = {
         'status': 200,

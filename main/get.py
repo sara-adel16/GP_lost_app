@@ -179,12 +179,10 @@ def post_comments(post_id, cur_user_id):
     return all_comments
 
 
-def posts(cursor, cur_user_id, start, limit, full_data):
+def posts(posts, cur_user_id, start, limit, full_data):
 
     all_posts = []
-    cur_post = cursor.fetchone()
-
-    while cur_post:
+    for cur_post in posts:
         # processing one post
         cur_post_data = {}
 
@@ -220,9 +218,6 @@ def posts(cursor, cur_user_id, start, limit, full_data):
             cur_post_data['comments'] = post_comments(cur_post['post_id'], cur_user_id)
 
         all_posts.append(cur_post_data)
-        cur_post = cursor.fetchone()
-
-    cursor.close()
 
     if full_data:
         res = cur_post_data
