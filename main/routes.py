@@ -114,12 +114,12 @@ def register():
 def delete_user():
     phone_number = request.json.get('phone_number')
     cursor = mysql.connection.cursor()
-    cursor.execute(''' UPDATE User SET phone_number = %s WHERE phone_number = %s ''', ("11111111111", phone_number,))
+    cursor.execute(''' UPDATE User SET phone_number = %s WHERE phone_number = %s ''', ("11111111112", phone_number,))
     mysql.connection.commit()
     cursor.close()
     return make_response(jsonify({
         'status': 200,
-        'message': 'تم حذف المستخدم بنجاح'
+        'message': 'تم حذف المستخدم'
     })), 200
 
 
