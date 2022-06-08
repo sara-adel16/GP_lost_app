@@ -1,5 +1,5 @@
 from flask import Blueprint, request, make_response, json, jsonify
-#from flask_jwt import JWT
+##from flask_jwt import JWT
 from main import app, mysql, bcrypt, SECRET_KEY, validate, get
 import MySQLdb.cursors
 import uuid, jwt
