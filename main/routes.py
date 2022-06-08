@@ -5,14 +5,16 @@ import MySQLdb.cursors
 import uuid, jwt
 from datetime import datetime
 import datetime
+import face_recognition
 
 auth_blueprint = Blueprint('main', __name__)
 
-'''
-Get All Posts
-'''
+
 @app.route('/get-all-posts', methods=['GET'])
 def get_all_posts():
+    '''
+    Get All Posts
+    '''
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
@@ -30,6 +32,9 @@ def get_all_posts():
 
 @app.route('/get-saved-posts', methods=['GET'])
 def get_saved_posts():
+    '''
+    Get Saved Posts of the current user
+    '''
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
@@ -48,6 +53,9 @@ def get_saved_posts():
 
 @app.route('/click-post', methods=['GET'])
 def click_post():
+    '''
+    Get all data of a specific post including comments and photos
+    '''
     post_id = request.args.get('post_id')
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
@@ -67,6 +75,8 @@ def click_post():
 def register():
     '''
     Registers New User
+    :request body: username, phone_number, email, password
+    :return: responses with a message telling whether the registration is successful or there is any invalid data
     '''
     data = request.json
     username = data.get('username')
@@ -80,12 +90,10 @@ def register():
 
     cursor = mysql.connection.cursor()
     cursor.execute(
-        ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id) VALUES (%s, %s, %s, %s, NULL) ''',
-        (username, phone_number, password, email,)
-    )
+        ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id)
+        VALUES (%s, %s, %s, %s, NULL) ''', (username, phone_number, password, email,))
 
     user_id = cursor.lastrowid
-
     mysql.connection.commit()
     cursor.close()
 
@@ -102,11 +110,11 @@ def register():
     return make_response(jsonify(res)), 200
 
 
-@app.route('/delete-user', methods=['DEL'])
+@app.route('/delete-user', methods=['DELETE'])
 def delete_user():
     phone_number = request.json.get('phone_number')
     cursor = mysql.connection.cursor()
-    cursor.execute(''' DELETE FROM user WHERE phone_number = %s ''', (phone_number,))
+    cursor.execute(''' UPDATE User SET phone_number = %s WHERE phone_number = %s ''', ("11111111111", phone_number,))
     mysql.connection.commit()
     cursor.close()
     return make_response(jsonify({
@@ -114,11 +122,14 @@ def delete_user():
         'message': 'تم حذف المستخدم بنجاح'
     })), 200
 
-'''
-Login
-'''
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    '''
+    Login users
+    :request body: phone_number, password
+    :return: responses with a message telling whether the login is successful or there is any invalid data
+    '''
     data = request.json
     phone_number, password = data.get('phone_number'), data.get('password')
 
@@ -208,8 +219,9 @@ def forgot_password():
 @app.route('/reset_password', methods=['GET', 'POST'])
 def reset_password():
     '''
-    Updates user password with the new one
+    Updates user password
     :request body: phone number - new password
+    :return: message telling that the password is updated successfully
     '''
     data = request.json
     phone_number = data.get('phone_number')
@@ -224,6 +236,43 @@ def reset_password():
         'message': "تم تحديث كلمة السر",
     }
     return make_response(jsonify(res)), 200
+
+
+@app.route("/search", methods=['POST'])
+def search():
+    data = json.loads(request.form.get('data'))
+
+    name = data.get('name')
+    age = data.get('age')
+    gender = data.get('gender')
+    city = data.get('city')
+    district = data.get('district')
+    address_details = data.get('address_details')
+    is_lost = data.get('is_lost')
+    more_details = data.get('more_details')
+
+    main_photo = request.files.get('main_photo')
+    extra_photos = request.files.getlist('extra_photos')
+
+    if extra_photos[0].filename == "":
+        extra_photos = []
+
+    unknown_image = face_recognition.load_image_file(
+        'C:/Users/YourPc/python face reco/face_recognition_examples/img/unknown/2.jpg')
+    unknown_face_encoding = face_recognition.face_encodings(unknown_image)[0]
+
+    image_of_khedr = face_recognition.load_image_file(
+        'C:/Users/YourPc/python face reco/face_recognition_examples/img/known/khedr.jpeg')
+    khedr_face_encoding = face_recognition.face_encodings(image_of_khedr)[0]
+
+    # Compare faces
+    results = face_recognition.compare_faces([khedr_face_encoding], unknown_face_encoding)
+    print(type(results[0]))
+
+    if results[0]:
+        print('This is khedr')
+    else:
+        print('This is NOT khedr')
 
 
 @app.route("/create-post", methods=['POST'])
@@ -260,12 +309,15 @@ def create_post():
     user_data = get.user(user_id)
 
     cursor = mysql.connection.cursor()
-    cursor.execute(''' INSERT INTO Address(city, district, address_details) VALUES (%s, %s, %s) ''', (city, district, address_details,))
+    cursor.execute(''' INSERT INTO Address(city, district, address_details) VALUES (%s, %s, %s) ''',
+                   (city, district, address_details,))
     mysql.connection.commit()
 
     address_id = cursor.lastrowid
 
-    cursor.execute(''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id) VALUES (%s, %s, %s, %s, %s) ''', (is_lost, more_details, date, address_id, user_id,))
+    cursor.execute(
+        ''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id) VALUES (%s, %s, %s, %s, %s) ''',
+        (is_lost, more_details, date, address_id, user_id,))
     mysql.connection.commit()
 
     post_id = cursor.lastrowid
@@ -275,17 +327,19 @@ def create_post():
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
-        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo))
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''',
+                       (post_id, cur_photo))
         mysql.connection.commit()
 
         extra_photos_paths.append(get.path(cur_photo.filename))
 
     if is_lost:
-        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
+                       (name, age, gender, post_id,))
     else:
-        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
+                       (name, age, gender, post_id,))
     mysql.connection.commit()
-
     cursor.close()
 
     res = {
@@ -357,28 +411,27 @@ def update_post():
     address_id, was_lost, date = data['address_id'], data['is_lost'], data['date_AND_time']
 
     cursor.execute(
-        ''' UPDATE Address SET city = %s, district = %s, address_details = %s WHERE address_id = %s ''', (city, district, address_details, address_id,))
+        ''' UPDATE Address SET city = %s, district = %s, address_details = %s WHERE address_id = %s ''',
+        (city, district, address_details, address_id,))
     mysql.connection.commit()
-
     cursor.execute(
         ''' DELETE FROM Post_Photo WHERE post_id = %s ''', (post_id,)
     )
     mysql.connection.commit()
-
-    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo,))
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''',
+                   (post_id, main_photo,))
     mysql.connection.commit()
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
-        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''', (post_id, cur_photo,))
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''',
+                       (post_id, cur_photo,))
         mysql.connection.commit()
-
         extra_photos_paths.append(get.path(cur_photo.filename))
 
     cursor.execute(
         ''' UPDATE Post SET is_lost = %s, more_details = %s WHERE post_id = %s ''', (is_lost, more_details, post_id,))
     mysql.connection.commit()
-
     if was_lost:
         cursor.execute(
             ''' DELETE FROM Lost_Person WHERE post_id = %s ''', (post_id,)
@@ -388,11 +441,12 @@ def update_post():
             ''' DELETE FROM Found_Person WHERE post_id = %s ''', (post_id,)
         )
     mysql.connection.commit()
-
     if is_lost:
-        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
+                       (name, age, gender, post_id,))
     else:
-        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''', (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
+                       (name, age, gender, post_id,))
     mysql.connection.commit()
     cursor.close()
 
@@ -428,6 +482,7 @@ def update_post():
 def delete_post():
     '''
     Deletes a post
+    :returns: message telling that the post is successfully deleted
     '''
     post_id = request.args.get('post_id')
 
@@ -449,7 +504,6 @@ def delete_post():
     mysql.connection.commit()
     cursor.execute(''' DELETE FROM Address WHERE address_id = %s ''', (address_id,))
     mysql.connection.commit()
-
     cursor.close()
 
     res = {
@@ -497,6 +551,7 @@ def unsave_post():
 def create_comment():
     '''
     Creates a new comment to a specific post
+    :request body: content (text)
     '''
     params = request.args
     post_id = int(params.get('post_id'))
@@ -511,12 +566,12 @@ def create_comment():
 
     cursor = mysql.connection.cursor()
     cursor.execute(
-        ''' INSERT INTO Comment(parent_id, content, date_AND_time, user_id, post_id) VALUES (%s, %s, %s, %s, %s) ''', (parent_id, content, date, user_id, post_id,))
+        ''' INSERT INTO Comment(parent_id, content, date_AND_time, user_id, post_id) VALUES (%s, %s, %s, %s, %s) ''',
+        (parent_id, content, date, user_id, post_id,))
     mysql.connection.commit()
     cursor.close()
 
     comment_id = cursor.lastrowid
-
     user_data = get.user(user_id)
     res = {
         'status': 200,
@@ -537,6 +592,7 @@ def create_comment():
 def update_comment():
     '''
     Updates a comment
+    :request body: content (text)
     '''
     params = request.args
     post_id = int(params.get('post_id'))
@@ -550,10 +606,12 @@ def update_comment():
 
     cursor = mysql.connection.cursor()
     cursor.execute(
-        ''' UPDATE Comment SET content = %s WHERE post_id = %s and parent_id = %s and comment_id = %s ''', (content, post_id, parent_id, comment_id,))
+        ''' UPDATE Comment SET content = %s WHERE post_id = %s and parent_id = %s and comment_id = %s ''',
+        (content, post_id, parent_id, comment_id,))
     mysql.connection.commit()
 
-    cursor.execute(''' SELECT date_AND_time FROM Comment WHERE post_id = %s and parent_id = %s and comment_id = %s ''', (post_id, parent_id, comment_id,))
+    cursor.execute(''' SELECT date_AND_time FROM Comment WHERE post_id = %s and parent_id = %s and comment_id = %s ''',
+                   (post_id, parent_id, comment_id,))
     data = cursor.fetchone()
     date = data['date_AND_time']
     cursor.close()
@@ -588,7 +646,6 @@ def delete_comment():
     user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
-
     if parent_id == 0:
         # if it's a main comment, delete it's replies
         cursor.execute(
@@ -596,7 +653,8 @@ def delete_comment():
         mysql.connection.commit()
 
     cursor.execute(
-        ''' DELETE FROM Comment WHERE post_id = %s and parent_id = %s and comment_id = %s ''', (post_id, parent_id, comment_id,))
+        ''' DELETE FROM Comment WHERE post_id = %s and parent_id = %s and comment_id = %s ''',
+        (post_id, parent_id, comment_id,))
     mysql.connection.commit()
     cursor.close()
 
@@ -609,6 +667,9 @@ def delete_comment():
 
 @app.route("/profile", methods=['GET'])
 def profile():
+    '''
+    Gets all data of the current user and his/her posts
+    '''
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
@@ -630,6 +691,9 @@ def profile():
 
 @app.route("/update-profile", methods=['PUT'])
 def update_profile():
+    '''
+    Updates data of current user
+    '''
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 
@@ -640,8 +704,6 @@ def update_profile():
 
     profile_photo = request.files.get('profile_photo')
 
-    cursor = mysql.connection.cursor()
-
     res = validate.user_data(data)
     if res is not None:
         if res['status'] == 202:
@@ -649,6 +711,7 @@ def update_profile():
         res['status'] = 409
         return make_response(jsonify(res)), 409
 
+    cursor = mysql.connection.cursor()
     if username != "":
         cursor.execute(''' UPDATE User SET the_name = %s WHERE user_id = %s ''', (username, user_id,))
         mysql.connection.commit()
@@ -665,7 +728,8 @@ def update_profile():
         cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
         data = cursor.fetchone()
         user_photo_id = data['user_photo_id']
-        cursor.execute(''' UPDATE user_photo SET photo = %s WHERE user_photo_id = %s ''', (profile_photo, user_photo_id,))
+        cursor.execute(''' UPDATE user_photo SET photo = %s WHERE user_photo_id = %s ''',
+                       (profile_photo, user_photo_id,))
         mysql.connection.commit()
 
     cursor.close()

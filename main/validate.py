@@ -1,7 +1,7 @@
 from main import mysql
 from flask import json, jsonify, make_response
 
-def register_phone_number(phone_number):
+def validate_phone_number(phone_number):
     cursor = mysql.connection.cursor()
     user = 'NONE'
     user = cursor.execute(''' SELECT user_id FROM User WHERE phone_number = %s ''', (phone_number,))
@@ -10,7 +10,7 @@ def register_phone_number(phone_number):
     return True if user else False
 
 
-def register_email(email):
+def validate_email(email):
     cursor = mysql.connection.cursor()
     user = 'NONE'
     user = cursor.execute(''' SELECT user_id FROM User WHERE email = %s ''', (email,))
@@ -19,24 +19,24 @@ def register_email(email):
     return True if user else False
 
 
-def registration(form):
+def user_data(form):
     phone_number = form.get('phone_number')
     email = form.get('email')
 
-    if register_phone_number(phone_number):
+    if phone_number is not None and phone_number != "" and validate_phone_number(phone_number):
         res = {
             'status': 202,
             'message': 'هذا المستخدم موجود بالفعل، قم بتسجيل الدخول',
             'data': None
         }
-        return make_response(jsonify(res)), 202
+        return res
 
-    if email is not None and email != "" and register_email(email):
+    if email is not None and email != "" and validate_email(email):
         res = {
             'status': 409,
             'message': "هذا البريد الإلكتروني مُستخدم",
             'data': None
         }
-        return make_response(jsonify(res)), 409
+        return res
 
     return None

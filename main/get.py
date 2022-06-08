@@ -2,6 +2,22 @@ from main import mysql
 from flask import json, jsonify, make_response
 
 
+def path(filename):
+    return "photos\\" + filename
+
+
+def filename(str):
+    st, en = -1, -1
+    for i,c in enumerate(str):
+        if c == "'":
+            if st == -1:
+                st = i + 1
+            else:
+                en = i
+                break
+    return str[st:en]
+
+
 def user(user_id):
 
     cursor = mysql.connection.cursor()
@@ -24,7 +40,7 @@ def user_photo(user_photo_id):
     cursor.execute(''' SELECT * FROM User_Photo WHERE user_photo_id = %s''', (user_photo_id,))
     data = cursor.fetchone()
     cursor.close()
-    return None if data is None else data['photo']
+    return None if data is None else path(filename(data['photo'].decode('UTF-8')))
 
 
 def address(address_id):
@@ -71,7 +87,7 @@ def found_person(post_id):
 
 def post(post_id):
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT * FROM Post WHERE post_id = %s''', (post_id,))
+    cursor.execute(''' SELECT * FROM Post WHERE post_id = %s ''', (post_id,))
     data = cursor.fetchone()
     cursor.close()
     return data
@@ -83,20 +99,19 @@ def post_main_photo(post_id):
     cur_photo = cursor.fetchone()
     cursor.close()
 
-    main_photo = None
-    if cur_photo:
-        main_photo = cur_photo['photo']
-    return main_photo
+    cur_photo = cur_photo['photo']
+    return None if cur_photo is None else path(filename(cur_photo.decode('UTF-8')))
 
 
 def post_extra_photos(post_id):
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT photo FROM Post_Photo WHERE post_id = %s and is_main = false ''', (post_id,))
+
     photos = []
     cur_photo = cursor.fetchone()
     while cur_photo:
         if cur_photo['photo'] is not None:
-            photos.append(cur_photo['photo'])
+            photos.append(path(filename(cur_photo['photo'].decode('UTF-8'))))
         cur_photo = cursor.fetchone()
     cursor.close()
     return photos
