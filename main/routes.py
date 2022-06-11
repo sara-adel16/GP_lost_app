@@ -293,15 +293,22 @@ def search():
         auth_token = request.headers.get('Authorization')
         user_id = decode_auth_token(auth_token)
 
+        cursor.execute(''' SELECT phone_number FROM User WHERE user_id = %s ''', (user_id,))
+        data = cursor.fetchone()
+        phone_number = data['phone_number']
+
         posts = get.posts(target_posts, user_id, start, limit, False)
         res = {
-            'posts': posts,
+            'data': {
+                'posts': posts,
+                'phone_number': phone_number
+            },
             'status': 200,
             'message': 'تم العثور على بعض النتائج'
         }
     else:
         res = {
-            'status': 200,
+            'status': 404,
             'message': 'لم يتم العثور على أي نتائج'
         }
 
