@@ -340,7 +340,7 @@ def create_post():
     main_photo = request.files.get('main_photo')
     extra_photos = request.files.getlist('extra_photos')
 
-    if extra_photos[0].filename == "":
+    if len(extra_photos) and extra_photos[0].filename == "":
         extra_photos = []
 
     date = datetime.datetime.now()
