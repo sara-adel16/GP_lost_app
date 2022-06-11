@@ -394,7 +394,7 @@ def create_post():
             "is_lost": is_lost,
             "person_data": {
                 "name": name,
-                "age": age,
+                "age": int(age),
                 "gender": gender,
                 "address": {
                     "city": city,
@@ -438,7 +438,7 @@ def update_post():
     main_photo = request.files.get('main_photo')
     extra_photos = request.files.getlist('extra_photos')
 
-    if extra_photos[0].filename == "":
+    if len(extra_photos) and extra_photos[0].filename == "":
         extra_photos = []
 
     auth_token = request.headers.get('Authorization')
@@ -501,7 +501,7 @@ def update_post():
             "is_lost": is_lost,
             "person_data": {
                 "name": name,
-                "age": age,
+                "age": int(age),
                 "gender": gender,
                 "address": {
                     "city": city,
