@@ -250,6 +250,7 @@ def search():
     is_lost = data.get('is_lost')
 
     file = request.files.get('main_photo')
+    file.save(app.root_path + '\\' + get.path(file.filename))
     unknown_photo = face_recognition.load_image_file(file)
     unknown_face_encoding = face_recognition.face_encodings(unknown_photo)[0]
 
@@ -340,6 +341,7 @@ def create_post():
     main_photo = request.files.get('main_photo')
     extra_photos = request.files.getlist('extra_photos')
 
+    main_photo.save(app.root_path + '\\' + get.path(main_photo.filename))
     if len(extra_photos) and extra_photos[0].filename == "":
         extra_photos = []
 
@@ -365,13 +367,14 @@ def create_post():
     cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo))
     mysql.connection.commit()
 
+
     extra_photos_paths = []
     for cur_photo in extra_photos:
         cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''',
                        (post_id, cur_photo))
         mysql.connection.commit()
-
         extra_photos_paths.append(get.path(cur_photo.filename))
+        cur_photo.save(app.root_path + '\\' + get.path(cur_photo.filename))
 
     if is_lost:
         cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
@@ -440,6 +443,7 @@ def update_post():
     main_photo = request.files.get('main_photo')
     extra_photos = request.files.getlist('extra_photos')
 
+    main_photo.save(app.root_path + '\\' + get.path(main_photo.filename))
     if len(extra_photos) and extra_photos[0].filename == "":
         extra_photos = []
 
@@ -470,6 +474,7 @@ def update_post():
                        (post_id, cur_photo,))
         mysql.connection.commit()
         extra_photos_paths.append(get.path(cur_photo.filename))
+        cur_photo.save(app.root_path + '\\' + get.path(cur_photo.filename))
 
     cursor.execute(
         ''' UPDATE Post SET is_lost = %s, more_details = %s WHERE post_id = %s ''', (is_lost, more_details, post_id,))
