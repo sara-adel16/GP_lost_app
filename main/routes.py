@@ -393,7 +393,7 @@ def create_post():
             "user_phone_number": user_data['phone_number'],
             "is_lost": is_lost,
             "person_data": {
-                "name": name,
+                "person_name": name,
                 "age": int(age),
                 "gender": gender,
                 "address": {
