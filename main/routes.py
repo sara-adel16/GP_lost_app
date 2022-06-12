@@ -404,6 +404,8 @@ def create_post():
                 "main_photo": get.path(main_photo.filename),
                 "extra_photos": extra_photos_paths
             },
+            "is_saved": False,
+            "is_owner": True,
             "more_details": more_details,
             "date": date
         }
@@ -511,6 +513,8 @@ def update_post():
                 "main_photo": get.path(main_photo.filename),
                 "extra_photos": extra_photos_paths
             },
+            "is_saved": False,
+            "is_owner": True,
             "more_details": more_details,
             "date": date
         }
