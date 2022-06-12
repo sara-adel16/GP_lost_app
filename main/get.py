@@ -208,7 +208,7 @@ def posts(posts, cur_user_id, start, limit, full_data):
             'user_photo': user_data['photo'],
             'is_lost': cur_post['is_lost'] == 1,
             'person_data': reported_person_data,
-            'more_details': cur_post['more_details'],
+            'details': cur_post['more_details'],
             'is_owner': cur_user_id == cur_post['user_id'],
             'is_saved': is_saved is not None,
             "date": cur_post['date_AND_time']

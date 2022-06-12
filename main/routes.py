@@ -406,7 +406,7 @@ def create_post():
             },
             "is_saved": False,
             "is_owner": True,
-            "more_details": more_details,
+            "details": more_details,
             "date": date
         }
     }
@@ -515,7 +515,7 @@ def update_post():
             },
             "is_saved": False,
             "is_owner": True,
-            "more_details": more_details,
+            "details": more_details,
             "date": date
         }
     }
