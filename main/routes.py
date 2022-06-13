@@ -1,5 +1,4 @@
 from flask import Blueprint, request, make_response, json, jsonify
-##from flask_jwt import JWT
 from main import app, mysql, bcrypt, SECRET_KEY, validate, get
 import MySQLdb.cursors
 import uuid, jwt
@@ -96,8 +95,8 @@ def register():
 
     cursor = mysql.connection.cursor()
     cursor.execute(
-        ''' INSERT INTO User (the_name, phone_number, the_password, email, user_photo_id)
-        VALUES (%s, %s, %s, %s, NULL) ''', (username, phone_number, password, email,))
+        ''' INSERT INTO User (the_name, phone_number, the_password, email, fcm_token, user_photo_id)
+        VALUES (%s, %s, %s, %s, "", NULL) ''', (username, phone_number, password, email,))
 
     user_id = cursor.lastrowid
     mysql.connection.commit()
@@ -252,7 +251,15 @@ def search():
     file = request.files.get('main_photo')
     file.save(app.root_path + '\\' + get.path(file.filename))
     unknown_photo = face_recognition.load_image_file(file)
-    unknown_face_encoding = face_recognition.face_encodings(unknown_photo)[0]
+    tmp = face_recognition.face_encodings(unknown_photo)
+    if len(tmp) == 0:
+        res = {
+            "status": 406,
+            "message": "من فضلك قم برفع صورة أوضح للوجه"
+        }
+        return make_response(jsonify(res)), 406
+
+    unknown_face_encoding = tmp[0]
 
     cursor = mysql.connection.cursor()
     if is_lost:
