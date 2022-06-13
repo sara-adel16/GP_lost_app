@@ -246,7 +246,11 @@ def reset_password():
 @app.route("/search", methods=['POST'])
 def search():
     data = json.loads(request.form.get('data'))
-    is_lost = data.get('is_lost')
+    is_lost_tmp = data.get('is_lost')
+    if type(is_lost_tmp) is bool or type(is_lost_tmp) is int:
+        is_lost = is_lost_tmp
+    else:
+        is_lost = True if is_lost_tmp == "true" else False
 
     file = request.files.get('main_photo')
     file.save(app.root_path + '\\' + get.path(file.filename))
@@ -267,8 +271,8 @@ def search():
     else:
         cursor.execute(''' SELECT * FROM Lost_Person ''')
 
-    target_posts = []
     all_people = cursor.fetchall()
+    target_posts = []
     for cur_person in all_people:
         post_id = cur_person['post_id']
         cursor.execute(''' SELECT photo FROM Post_Photo WHERE post_id = %s ''', (post_id,))
@@ -337,7 +341,12 @@ def create_post():
     city = data.get('city')
     district = data.get('district')
     address_details = data.get('address_details')
-    is_lost = data.get('is_lost')
+    is_lost_tmp = data.get('is_lost')
+    if type(is_lost_tmp) is bool or type(is_lost_tmp) is int:
+        is_lost = is_lost_tmp
+    else:
+        is_lost = True if is_lost_tmp == "true" else False
+
     more_details = data.get('more_details')
 
     main_photo = request.files.get('main_photo')
@@ -439,7 +448,12 @@ def update_post():
     city = data.get('city')
     district = data.get('district')
     address_details = data.get('address_details')
-    is_lost = data.get('is_lost')
+    is_lost_tmp = data.get('is_lost')
+    if type(is_lost_tmp) is bool or type(is_lost_tmp) is int:
+        is_lost = is_lost_tmp
+    else:
+        is_lost = True if is_lost_tmp == "true" else False
+
     more_details = data.get('more_details')
 
     main_photo = request.files.get('main_photo')
