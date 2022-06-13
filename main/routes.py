@@ -295,22 +295,17 @@ def search():
             post_data = cursor.fetchone()
             target_posts.append(post_data)
 
+    cursor.close()
+
     if len(target_posts):
         start = int(request.args.get('start'))
         limit = int(request.args.get('limit'))
         auth_token = request.headers.get('Authorization')
         user_id = decode_auth_token(auth_token)
 
-        cursor.execute(''' SELECT phone_number FROM User WHERE user_id = %s ''', (user_id,))
-        data = cursor.fetchone()
-        phone_number = data['phone_number']
-
         posts = get.posts(target_posts, user_id, start, limit, False)
         res = {
-            'data': {
-                'posts': posts,
-                'phone_number': phone_number
-            },
+            'posts': posts,
             'status': 200,
             'message': 'تم العثور على بعض النتائج'
         }
