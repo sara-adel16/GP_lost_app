@@ -96,10 +96,10 @@ def post(post_id):
 def post_main_photo(post_id):
     cursor = mysql.connection.cursor()
     cursor.execute(''' SELECT photo FROM Post_Photo WHERE post_id = %s and is_main = true ''', (post_id,))
-    cur_photo = cursor.fetchone()
+    data = cursor.fetchone()
     cursor.close()
 
-    cur_photo = cur_photo['photo']
+    cur_photo = data['photo']
     return None if cur_photo is None else path(filename(cur_photo.decode('UTF-8')))
 
 
