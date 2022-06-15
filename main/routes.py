@@ -18,7 +18,7 @@ def get_all_posts():
     user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT * from Post ''')
+    cursor.execute(''' SELECT * from Post WHERE is_temp = false''')
     posts = cursor.fetchall()
     cursor.close()
 
@@ -267,9 +267,9 @@ def search():
 
     cursor = mysql.connection.cursor()
     if is_lost:
-        cursor.execute(''' SELECT * FROM Found_Person ''')
+        cursor.execute(''' SELECT * FROM Found_Person WHERE is_temp = false ''')
     else:
-        cursor.execute(''' SELECT * FROM Lost_Person ''')
+        cursor.execute(''' SELECT * FROM Lost_Person WHERE is_temp = false ''')
 
     all_people = cursor.fetchall()
     target_posts = []
@@ -285,7 +285,10 @@ def search():
             file = cur_photo['photo'].decode('UTF-8')
             file_name = app.root_path + '\\' + get.path(get.filename(file))
             known_photo = face_recognition.load_image_file(file_name)
-            known_faces_encoding.append(face_recognition.face_encodings(known_photo)[0])
+            tmp = face_recognition.face_encodings(known_photo)
+            if len(tmp) == 0:
+                continue
+            known_faces_encoding.append(tmp[0])
 
         # Compare faces
         results = face_recognition.compare_faces(known_faces_encoding, unknown_face_encoding)
@@ -327,14 +330,13 @@ def create_post():
     """
     Creates new post
     :request header: user token
-    :request body: name - age - gender -
-                    city name - street name - address details -
-                    lost or found - more details - photo - extra photos
+    :request body: name - age - gender - city name - street name - address details
+                    - lost or found - more details - photo - extra photos
     :return: user data & lost/found person data
     """
-
+    is_temp_tmp = request.args.get('is_temp')
     data = json.loads(request.form.get('data'))
-
+    clicked_post_id = data.get('clicked_post_id')
     name = data.get('name')
     age = data.get('age')
     gender = data.get('gender')
@@ -346,9 +348,12 @@ def create_post():
         is_lost = is_lost_tmp
     else:
         is_lost = True if is_lost_tmp == "true" else False
+    if type(is_temp_tmp) is bool or type(is_temp_tmp) is int:
+        is_temp = is_temp_tmp
+    else:
+        is_temp = True if is_temp_tmp == "true" else False
 
     more_details = data.get('more_details')
-
     main_photo = request.files.get('main_photo')
     extra_photos = request.files.getlist('extra_photos')
 
@@ -369,33 +374,40 @@ def create_post():
     address_id = cursor.lastrowid
 
     cursor.execute(
-        ''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id) VALUES (%s, %s, %s, %s, %s) ''',
-        (is_lost, more_details, date, address_id, user_id,))
+        ''' INSERT INTO Post(is_lost, more_details, date_AND_time, address_id, user_id, is_temp) VALUES (%s, %s, %s, %s, %s, %s) ''',
+        (is_lost, more_details, date, address_id, user_id, is_temp,))
     mysql.connection.commit()
-
     post_id = cursor.lastrowid
 
-    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''', (post_id, main_photo))
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, true) ''', (post_id, main_photo, is_temp,))
     mysql.connection.commit()
-
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
-        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''',
-                       (post_id, cur_photo))
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, false) ''',
+                       (post_id, cur_photo, is_temp,))
         mysql.connection.commit()
         extra_photos_paths.append(get.path(cur_photo.filename))
         cur_photo.save(app.root_path + '\\' + get.path(cur_photo.filename))
 
     if is_lost:
-        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
-                       (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
+                       (name, age, gender, post_id, is_temp,))
     else:
-        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
-                       (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
+                       (name, age, gender, post_id, is_temp,))
     mysql.connection.commit()
-    cursor.close()
 
+    if is_temp:
+
+        cursor.execute(''' SELECT user_id from post WHERE post_id = %s ''', (clicked_post_id,))
+        data = cursor.fetchone()
+        clicked_post_user_id = data['user_id']
+        cursor.execute(''' SELECT fcm_token from User WHERE user_id = %s ''', (clicked_post_user_id,))
+        data = cursor.fetchone()
+        fcm_token = data['fcm_token']
+
+    cursor.close()
     res = {
         "status": 200,
         "message": "تم نشر المنشور بنجاح",
@@ -439,6 +451,7 @@ def update_post():
         :return: user data & lost/found person data
     """
 
+    is_temp = request.args.get('is_temp')
     post_id = request.args.get('post_id')
     data = json.loads(request.form.get('data'))
 
@@ -480,14 +493,14 @@ def update_post():
         ''' DELETE FROM Post_Photo WHERE post_id = %s ''', (post_id,)
     )
     mysql.connection.commit()
-    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, true) ''',
-                   (post_id, main_photo,))
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, true) ''',
+                   (post_id, main_photo, is_temp,))
     mysql.connection.commit()
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
-        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_main) VALUES (%s, %s, false) ''',
-                       (post_id, cur_photo,))
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, false) ''',
+                       (post_id, cur_photo, is_temp,))
         mysql.connection.commit()
         extra_photos_paths.append(get.path(cur_photo.filename))
         cur_photo.save(app.root_path + '\\' + get.path(cur_photo.filename))
@@ -505,11 +518,11 @@ def update_post():
         )
     mysql.connection.commit()
     if is_lost:
-        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
-                       (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
+                       (name, age, gender, post_id, is_temp,))
     else:
-        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id) VALUES (%s, %s, %s, %s) ''',
-                       (name, age, gender, post_id,))
+        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
+                       (name, age, gender, post_id, is_temp,))
     mysql.connection.commit()
     cursor.close()
 
@@ -621,12 +634,9 @@ def create_comment():
     params = request.args
     post_id = int(params.get('post_id'))
     parent_id = params.get('parent_id')
-
     content = request.json['content']
-
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
-
     date = datetime.datetime.now()
 
     cursor = mysql.connection.cursor()
@@ -742,7 +752,7 @@ def profile():
     limit = int(request.args.get('limit'))
 
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT * FROM Post WHERE user_id = %s ''', (user_id,))
+    cursor.execute(''' SELECT * FROM Post WHERE user_id = %s and is_temp = false ''', (user_id,))
     posts = cursor.fetchall()
     cursor.close()
 
