@@ -680,23 +680,24 @@ def create_comment():
         data = cursor.fetchone()
         noti_user_id = data['user_id']
 
-    cursor.execute(''' SELECT fcm_token from User WHERE user_id = %s ''', (noti_user_id,))
-    data = cursor.fetchone()
-    fcm_token = data['fcm_token']
-    fcm.sendPush(title,msg,[fcm_token],{"post_id": str(post_id)})
+    if noti_user_id != user_id:
+        cursor.execute(''' SELECT fcm_token from User WHERE user_id = %s ''', (noti_user_id,))
+        data = cursor.fetchone()
+        fcm_token = data['fcm_token']
+        fcm.sendPush(title,msg,[fcm_token],{"post_id": str(post_id)})
 
-    cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
-    data = cursor.fetchone()
-    user_photo_id = data['user_photo_id']
+        cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
+        data = cursor.fetchone()
+        user_photo_id = data['user_photo_id']
 
-    cursor.execute(''' SELECT post_photo_id from post_photo WHERE post_id = %s and is_main = true ''', (post_id,))
-    data = cursor.fetchone()
-    main_photo_id = data['post_photo_id']
+        cursor.execute(''' SELECT post_photo_id from post_photo WHERE post_id = %s and is_main = true ''', (post_id,))
+        data = cursor.fetchone()
+        main_photo_id = data['post_photo_id']
 
-    cursor.execute(
-        ''' INSERT INTO Notifications(user_id, user_photo_id, post_photo_id, title, msg) VALUES (%s, %s, %s, %s, %s) ''',
-        (noti_user_id, user_photo_id, main_photo_id, title, msg,))
-    mysql.connection.commit()
+        cursor.execute(
+            ''' INSERT INTO Notifications(user_id, user_photo_id, post_photo_id, title, msg) VALUES (%s, %s, %s, %s, %s) ''',
+            (noti_user_id, user_photo_id, main_photo_id, title, msg,))
+        mysql.connection.commit()
 
     cursor.close()
     res = {
