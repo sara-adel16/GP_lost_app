@@ -859,6 +859,7 @@ def update_profile():
         cursor.execute(''' UPDATE user_photo SET photo = %s WHERE user_photo_id = %s ''',
                        (profile_photo, user_photo_id,))
         mysql.connection.commit()
+        profile_photo.save(app.root_path + '\\' + get.path(profile_photo.filename))
 
     cursor.close()
 

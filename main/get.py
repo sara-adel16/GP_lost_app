@@ -225,3 +225,31 @@ def posts(posts, cur_user_id, start, limit, full_data):
         res = all_posts[start: start + limit]
 
     return res
+
+
+def Notifications(notifications, user_id):
+    ret = []
+    for cur_not in notifications:
+        user_photo_id = cur_not['user_photo_id']
+        post_photo_id = cur_not['post_photo_id']
+
+        cursor = mysql.connection.cursor()
+        cursor.execute(''' SELECT photo from user_photo WHERE user_photo_id = %s ''', (user_photo_id,))
+        data = cursor.fetchone()
+        user_photo = None if data is None else data['photo']
+
+        cursor.execute(''' SELECT photo from post_photo WHERE post_photo_id = %s ''', (post_photo_id,))
+        data = cursor.fetchone()
+        post_photo = None if data is None else data['photo']
+        cursor.close()
+
+        cur_ret = {
+            'title': cur_not['title'],
+            'msg': cur_not['msg'],
+            'user_photo': None if user_photo is None else path(filename(user_photo.decode('UTF-8'))),
+            'post_photo': None if post_photo is None else path(filename(post_photo.decode('UTF-8')))
+        }
+
+        ret.append(cur_ret)
+
+    return ret
