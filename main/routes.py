@@ -5,6 +5,7 @@ import uuid, jwt
 from datetime import datetime
 import datetime
 import face_recognition
+from main.FCM import FCMManager as fcm
 
 auth_blueprint = Blueprint('main', __name__)
 
@@ -18,7 +19,7 @@ def get_all_posts():
     user_id = decode_auth_token(auth_token)
 
     cursor = mysql.connection.cursor()
-    cursor.execute(''' SELECT * from Post WHERE is_temp = false''')
+    cursor.execute(''' SELECT * from Post WHERE is_temp = false ''')
     posts = cursor.fetchall()
     cursor.close()
 
@@ -381,6 +382,7 @@ def create_post():
 
     cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, true) ''', (post_id, main_photo, is_temp,))
     mysql.connection.commit()
+    main_photo_id = cursor.lastrowid
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
@@ -406,6 +408,24 @@ def create_post():
         cursor.execute(''' SELECT fcm_token from User WHERE user_id = %s ''', (clicked_post_user_id,))
         data = cursor.fetchone()
         fcm_token = data['fcm_token']
+
+        name = user_data['username']
+        if is_lost:
+            title = 'تم العثور على ذوي أحد الأشخاص الذين أبلغت عن إيجادهم!'
+            msg = f'قام {name} بالإبلاغ عن فقدان شخص يشبه أحد الأشخاص الذين قمت بالإبلاغ عن إيجادهم، سيتم التواصل معك'
+        else:
+            title = 'تم العثور على شخص يشبه أحد الأشخاص الذين أبلغت عن فقدانهم!'
+            msg = f'قام {name} بالإبلاغ عن إيجاد شخص يشبه أحد الأشخاص الذين قمت بالإبلاغ عن فقدانهم، سيتم التواصل معك'
+        fcm.sendPush(title, msg, [fcm_token], {"post_id": str(post_id)})
+
+        cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
+        data = cursor.fetchone()
+        user_photo_id = data['user_photo_id']
+
+        cursor.execute(
+            ''' INSERT INTO Notifications(user_id, user_photo_id, post_photo_id, title, msg) VALUES (%s, %s, %s, %s, %s) ''',
+            (clicked_post_user_id, user_photo_id, main_photo_id, title, msg,))
+        mysql.connection.commit()
 
     cursor.close()
     res = {
@@ -451,7 +471,6 @@ def update_post():
         :return: user data & lost/found person data
     """
 
-    is_temp = request.args.get('is_temp')
     post_id = request.args.get('post_id')
     data = json.loads(request.form.get('data'))
 
@@ -493,14 +512,14 @@ def update_post():
         ''' DELETE FROM Post_Photo WHERE post_id = %s ''', (post_id,)
     )
     mysql.connection.commit()
-    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, true) ''',
-                   (post_id, main_photo, is_temp,))
+    cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, false, true) ''',
+                   (post_id, main_photo,))
     mysql.connection.commit()
 
     extra_photos_paths = []
     for cur_photo in extra_photos:
-        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, %s, false) ''',
-                       (post_id, cur_photo, is_temp,))
+        cursor.execute(''' INSERT INTO Post_Photo(post_id, photo, is_temp, is_main) VALUES (%s, %s, false, false) ''',
+                       (post_id, cur_photo,))
         mysql.connection.commit()
         extra_photos_paths.append(get.path(cur_photo.filename))
         cur_photo.save(app.root_path + '\\' + get.path(cur_photo.filename))
@@ -518,11 +537,11 @@ def update_post():
         )
     mysql.connection.commit()
     if is_lost:
-        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
-                       (name, age, gender, post_id, is_temp,))
+        cursor.execute(''' INSERT INTO Lost_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, false) ''',
+                       (name, age, gender, post_id,))
     else:
-        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, %s) ''',
-                       (name, age, gender, post_id, is_temp,))
+        cursor.execute(''' INSERT INTO Found_Person(the_name, age, gender, post_id, is_temp) VALUES (%s, %s, %s, %s, false) ''',
+                       (name, age, gender, post_id,))
     mysql.connection.commit()
     cursor.close()
 
@@ -644,10 +663,42 @@ def create_comment():
         ''' INSERT INTO Comment(parent_id, content, date_AND_time, user_id, post_id) VALUES (%s, %s, %s, %s, %s) ''',
         (parent_id, content, date, user_id, post_id,))
     mysql.connection.commit()
-    cursor.close()
 
     comment_id = cursor.lastrowid
     user_data = get.user(user_id)
+
+    if parent_id == 0 or parent_id == '0':
+        title = f'علق {user_data["username"]} على منشورك'
+        msg = f'علق {user_data["username"]} على منشورك: {content}'
+        cursor.execute(''' SELECT user_id from post WHERE post_id = %s ''', (post_id,))
+        data = cursor.fetchone()
+        noti_user_id = data['user_id']
+    else:
+        title = f'قام {user_data["username"]} بالرد على تعليقك'
+        msg = f'قام {user_data["username"]} بالرد على تعليقك: {content}'
+        cursor.execute(''' SELECT user_id from comment WHERE comment_id = %s ''', (parent_id,))
+        data = cursor.fetchone()
+        noti_user_id = data['user_id']
+
+    cursor.execute(''' SELECT fcm_token from User WHERE user_id = %s ''', (noti_user_id,))
+    data = cursor.fetchone()
+    fcm_token = data['fcm_token']
+    fcm.sendPush(title,msg,[fcm_token],{"post_id": str(post_id)})
+
+    cursor.execute(''' SELECT user_photo_id from User WHERE user_id = %s ''', (user_id,))
+    data = cursor.fetchone()
+    user_photo_id = data['user_photo_id']
+
+    cursor.execute(''' SELECT post_photo_id from post_photo WHERE post_id = %s and is_main = true ''', (post_id,))
+    data = cursor.fetchone()
+    main_photo_id = data['post_photo_id']
+
+    cursor.execute(
+        ''' INSERT INTO Notifications(user_id, user_photo_id, post_photo_id, title, msg) VALUES (%s, %s, %s, %s, %s) ''',
+        (noti_user_id, user_photo_id, main_photo_id, title, msg,))
+    mysql.connection.commit()
+
+    cursor.close()
     res = {
         'status': 200,
         'message': 'تم نشر التعليق بنجاح',
