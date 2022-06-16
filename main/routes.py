@@ -246,6 +246,9 @@ def reset_password():
 
 @app.route("/search", methods=['POST'])
 def search():
+    auth_token = request.headers.get('Authorization')
+    user_id = decode_auth_token(auth_token)
+
     data = json.loads(request.form.get('data'))
     is_lost_tmp = data.get('is_lost')
     if type(is_lost_tmp) is bool or type(is_lost_tmp) is int:
@@ -276,6 +279,12 @@ def search():
     target_posts = []
     for cur_person in all_people:
         post_id = cur_person['post_id']
+        cursor.execute(''' SELECT user_id FROM Post WHERE post_id = %s ''', (post_id,))
+        data = cursor.fetchone()
+        post_user_id = data['user_id']
+        if post_user_id == user_id:
+            continue
+
         cursor.execute(''' SELECT photo FROM Post_Photo WHERE post_id = %s ''', (post_id,))
         post_photos = cursor.fetchall()
 
@@ -308,8 +317,6 @@ def search():
     if len(target_posts):
         start = int(request.args.get('start'))
         limit = int(request.args.get('limit'))
-        auth_token = request.headers.get('Authorization')
-        user_id = decode_auth_token(auth_token)
 
         posts = get.posts(target_posts, user_id, start, limit, False)
         res = {
