@@ -238,16 +238,17 @@ def Notifications(notifications, user_id):
         data = cursor.fetchone()
         user_photo = None if data is None else data['photo']
 
-        cursor.execute(''' SELECT photo from post_photo WHERE post_photo_id = %s ''', (post_photo_id,))
+        cursor.execute(''' SELECT photo,post_id from post_photo WHERE post_photo_id = %s ''', (post_photo_id,))
         data = cursor.fetchone()
-        post_photo = None if data is None else data['photo']
+        post_id, post_photo = data['post_id'], None if data is None else data['photo']
         cursor.close()
 
         cur_ret = {
             'title': cur_not['title'],
             'msg': cur_not['msg'],
             'user_photo': None if user_photo is None else path(filename(user_photo.decode('UTF-8'))),
-            'post_photo': None if post_photo is None else path(filename(post_photo.decode('UTF-8')))
+            'post_photo': None if post_photo is None else path(filename(post_photo.decode('UTF-8'))),
+            'post_id': post_id
         }
 
         ret.append(cur_ret)
