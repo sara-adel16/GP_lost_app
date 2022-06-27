@@ -6,10 +6,10 @@ The application aims to provide a specialized platform to find missing people. W
 
 •	Files:
 
-routes.py: main project APIs
+routes.py: Main project APIs
 
 get.py: Helper functions
 
-validate.py: validation for some user data
+validate.py: Validation for some user data
 
 FCM: Notifications
