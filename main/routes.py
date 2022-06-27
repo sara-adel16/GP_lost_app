@@ -116,19 +116,6 @@ def register():
     return make_response(jsonify(res)), 200
 
 
-@app.route('/delete-user', methods=['PUT'])
-def delete_user():
-    phone_number = request.json.get('phone_number')
-    cursor = mysql.connection.cursor()
-    cursor.execute(''' UPDATE User SET phone_number = %s WHERE phone_number = %s ''', ("11111111112", phone_number,))
-    mysql.connection.commit()
-    cursor.close()
-    return make_response(jsonify({
-        'status': 200,
-        'message': ' تم حذف المستخدم بنجاح'
-    })), 200
-
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     '''
@@ -246,6 +233,9 @@ def reset_password():
 
 @app.route("/search", methods=['POST'])
 def search():
+    '''
+    Face Recognition
+    '''
     auth_token = request.headers.get('Authorization')
     user_id = decode_auth_token(auth_token)
 

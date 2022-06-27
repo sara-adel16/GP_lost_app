@@ -1,6 +1,9 @@
 from main import mysql
 from flask import json, jsonify, make_response
 
+'''
+Helper Functions
+'''
 
 def path(filename):
     return "photos\\" + filename
