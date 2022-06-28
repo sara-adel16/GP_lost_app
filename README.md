@@ -13,3 +13,5 @@ get.py: Helper functions
 validate.py: Validation for some user data
 
 FCM: Notifications
+
+DB-Tables: MySQL DataBase Tables
